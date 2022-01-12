@@ -1,7 +1,10 @@
 import csv
 from datetime import datetime
+import os
 from pathlib import Path
+import re
 from shutil import copyfile
+import shutil
 from typing import Any
 from typing import Dict
 from typing import List
@@ -9,6 +12,7 @@ from typing import Tuple
 from zipfile import ZipFile
 
 import dask.dataframe as dd
+from fugue_sql import FugueSQLWorkflow
 import pandas as pd
 import requests
 from stqdm import stqdm
@@ -121,10 +125,23 @@ def _filter_bers(
     filters: Dict[str, Any],
     dtypes: Dict[str, str],
 ) -> None:
-    st.error(
-        "Cannot yet filter all BERs in ~1GB of RAM, "
-        "see https://github.com/energy-modelling-ireland/ibsg/issues/24"
-    )
+    # fugue expects column names consisting of only [A-Z, 0-9, _] 
+    header = [
+        c.replace("(", "_").replace(")", "_").replace(" ", "")
+        for c in dtypes.keys()
+    ]
+    with FugueSQLWorkflow() as dag:
+        bers = dag.load(
+            input_filepath,
+            sep="\t",
+            encoding="latin-1",
+            quoting=csv.QUOTE_NONE,
+            columns=header,
+            dtype=dtypes,
+            skiprows=1,
+            fmt="csv", 
+        )
+
 
 
 def _generate_bers(
@@ -138,7 +155,8 @@ def _generate_bers(
     filename = f"BERPublicsearch-{today:%d-%m-%Y}"
     zipped_bers = data_dir / f"{filename}.zip"
     unzipped_bers = data_dir / filename
-    raw_bers = data_dir / filename / "BERPublicsearch.txt"
+    raw_bers_txt = data_dir / filename / "BERPublicsearch.txt"
+    raw_bers_csv = data_dir / filename / "BERPublicsearch.csv"
     clean_bers = download_dir / f"{filename}.csv.gz"
 
     if not zipped_bers.exists():
@@ -146,10 +164,12 @@ def _generate_bers(
             _download_bers(defaults["download"], zipped_bers)
         with st.spinner(f"Unzipping `{zipped_bers}` ..."):
             _unzip_bers(zipped_bers, unzipped_bers)
-    
+        with st.spinner(f"Renaming `{raw_bers_txt.name}` to {raw_bers_csv.name} ..."):
+            os.rename(raw_bers_txt, raw_bers_csv)
+
     with st.spinner(f"Filtering BERs & saving to {clean_bers} ..."):
         _filter_bers(
-            raw_bers,
+            raw_bers_csv,
             clean_bers,
             filters=selections["bounds"],
             dtypes=dtypes,

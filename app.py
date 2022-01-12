@@ -141,7 +141,23 @@ def _filter_bers(
             skiprows=1,
             fmt="csv", 
         )
-
+        dag(f"""
+        SELECT * FROM bers
+        WHERE GroundFloorArea > {filters['GroundFloorArea']['lb']}
+        AND GroundFloorArea < {filters['GroundFloorArea']['ub']}
+        AND LivingAreaPercent > {filters['LivingAreaPercent']['lb']}
+        AND LivingAreaPercent < {filters['LivingAreaPercent']['ub']}
+        AND HSMainSystemEfficiency > {filters['HSMainSystemEfficiency']['lb']}
+        AND HSMainSystemEfficiency < {filters['HSMainSystemEfficiency']['ub']}
+        AND WHMainSystemEff > {filters['WHMainSystemEff']['lb']}
+        AND WHMainSystemEff < {filters['WHMainSystemEff']['ub']}
+        AND HSEffAdjFactor > {filters['HSEffAdjFactor']['lb']}
+        AND WHEffAdjFactor > {filters['WHEffAdjFactor']['lb']}
+        AND DeclaredLossFactor < {filters['DeclaredLossFactor']['ub']}
+        AND ThermalBridgingFactor > {filters['ThermalBridgingFactor']['lb']}
+        AND ThermalBridgingFactor < {filters['ThermalBridgingFactor']['ub']}
+        SAVE OVERWRITE '{output_filepath}'
+        """)
 
 
 def _generate_bers(

@@ -115,10 +115,8 @@ def _rename_bers_as_csv(input_filepath: Path) -> None:
     input_filepath.rename(csv_filename)
 
 
-def _filter_bers(
+def _convert_txt_to_db(
     input_filepath: Path,
-    output_filepath: Path,
-    filters: Dict[str, Any],
     dtypes: Dict[str, str],
 ) -> None:
     name = input_filepath.parent.name
@@ -142,6 +140,17 @@ def _filter_bers(
             with st.spinner(f"Chunk {i} saved to {db}"):
                 chunk.to_sql("bers", con=con, if_exists="append")
 
+
+def _filter_bers(
+    input_filepath: Path,
+    output_filepath: Path,
+    filters: Dict[str, Any],
+) -> None:
+    name = input_filepath.parent.name
+    db = Path(f"/tmp/{name}.db")
+    con = sqlite3.connect(db)
+    chunksize = 100000
+    cur = con.cursor()
     sql_query = f"""
         SELECT * FROM bers
         WHERE GroundFloorArea > {int(filters['GroundFloorArea']['lb'])}
@@ -188,12 +197,14 @@ def _generate_bers(
         with st.spinner(f"Unzipping `{zipped_bers}` ..."):
             _unzip_bers(zipped_bers, unzipped_bers)
     
-    with st.spinner(f"Filtering BERs & saving to {clean_bers} ..."):
+    with st.spinner("Converting txt to db ... "):
+        _convert_txt_to_db(raw_bers, dtypes)
+
+    with st.spinner(f"Filtering BERs ..."):
         _filter_bers(
             raw_bers,
             clean_bers,
             filters=selections["bounds"],
-            dtypes=dtypes,
         )
     
     st.info(f"[{filename}](downloads/{clean_bers.name})")

@@ -196,7 +196,7 @@ def _generate_bers(
             dtypes=dtypes,
         )
     
-    st.info(f"[{filename}](downloads/{filename})")
+    st.info(f"[{filename}](downloads/{clean_bers.name})")
 
 
 def main(

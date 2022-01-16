@@ -124,7 +124,7 @@ def _filter_bers(
     name = input_filepath.parent.name
     db = Path(f"/tmp/{name}.db")
     con = sqlite3.connect(db)
-    chunksize = 1e4
+    chunksize = 100000
     cur = con.cursor()
     db_exists = "bers" in cur.execute(
         "SELECT name FROM sqlite_master WHERE name='bers';"
@@ -138,9 +138,10 @@ def _filter_bers(
             dtype=dtypes,
             chunksize=chunksize
         )
-        for chunk in stqdm(chunks):
-            chunk.to_sql("bers", con=con, if_exists="append")
-    
+        for i, chunk in enumerate(chunks):
+            with st.spinner(f"Chunk {i} saved to {db}"):
+                chunk.to_sql("bers", con=con, if_exists="append")
+
     sql_query = f"""
         SELECT * FROM bers
         WHERE GroundFloorArea > {int(filters['GroundFloorArea']['lb'])}
@@ -162,8 +163,10 @@ def _filter_bers(
         con=con,
         chunksize=chunksize,
     )
-    for chunk in stqdm(chunks):
-        chunk.to_csv(output_filepath)
+    for i, chunk in enumerate(chunks):
+        with st.spinner(f"Chunk {i} saved to {output_filepath}"):
+            chunk.to_csv(output_filepath)
+
 
 def _generate_bers(
     data_dir: Path,

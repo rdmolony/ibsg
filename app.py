@@ -121,11 +121,15 @@ def _filter_bers(
     filters: Dict[str, Any],
     dtypes: Dict[str, str],
 ) -> None:
-    name = input_filepath.name
+    name = input_filepath.parent.name
     db = Path(f"/tmp/{name}.db")
     con = sqlite3.connect(db)
     chunksize = 1e4
-    if not db.exists():
+    cur = con.cursor()
+    db_exists = "bers" in cur.execute(
+        "SELECT name FROM sqlite_master WHERE name='bers';"
+    ).fetchall()
+    if not db_exists:
         chunks = pd.read_csv(
             input_filepath,
             sep="\t",

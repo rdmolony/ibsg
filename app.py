@@ -2,13 +2,13 @@ import csv
 from datetime import datetime
 from pathlib import Path
 from shutil import copyfile
+import sqlite3
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Tuple
 from zipfile import ZipFile
 
-import dask.dataframe as dd
 import pandas as pd
 import requests
 from stqdm import stqdm
@@ -121,11 +121,45 @@ def _filter_bers(
     filters: Dict[str, Any],
     dtypes: Dict[str, str],
 ) -> None:
-    st.error(
-        "Cannot yet filter all BERs in ~1GB of RAM, "
-        "see https://github.com/energy-modelling-ireland/ibsg/issues/24"
+    name = input_filepath.name
+    db = Path(f"/tmp/{name}.db")
+    con = sqlite3.connect(db)
+    chunksize = 1e4
+    if not db.exists():
+        chunks = pd.read_csv(
+            input_filepath,
+            sep="\t",
+            encoding="latin-1",
+            quoting=csv.QUOTE_NONE,
+            dtype=dtypes,
+            chunksize=chunksize
+        )
+        for chunk in stqdm(chunks):
+            chunk.to_sql("bers", con=con, if_exists="append")
+    
+    sql_query = f"""
+        SELECT * FROM bers
+        WHERE GroundFloorArea > {int(filters['GroundFloorArea']['lb'])}
+        AND GroundFloorArea < {int(filters['GroundFloorArea']['ub'])}
+        AND LivingAreaPercent > {int(filters['LivingAreaPercent']['lb'])}
+        AND LivingAreaPercent < {int(filters['LivingAreaPercent']['ub'])}
+        AND HSMainSystemEfficiency > {int(filters['HSMainSystemEfficiency']['lb'])}
+        AND HSMainSystemEfficiency < {int(filters['HSMainSystemEfficiency']['ub'])}
+        AND WHMainSystemEff > {int(filters['WHMainSystemEff']['lb'])}
+        AND WHMainSystemEff < {int(filters['WHMainSystemEff']['ub'])}
+        AND HSEffAdjFactor > {float(filters['HSEffAdjFactor']['lb'])}
+        AND WHEffAdjFactor > {float(filters['WHEffAdjFactor']['lb'])}
+        AND DeclaredLossFactor < {int(filters['DeclaredLossFactor']['ub'])}
+        AND ThermalBridgingFactor > {float(filters['ThermalBridgingFactor']['lb'])}
+        AND ThermalBridgingFactor < {float(filters['ThermalBridgingFactor']['ub'])}
+    """
+    chunks = pd.read_sql_query(
+        sql_query,
+        con=con,
+        chunksize=chunksize,
     )
-
+    for chunk in stqdm(chunks):
+        chunk.to_csv(output_filepath)
 
 def _generate_bers(
     data_dir: Path,
